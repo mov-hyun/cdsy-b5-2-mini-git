@@ -1,0 +1,4 @@
+Mini Git
+Indexed search
+Graph traversal
+Stable sorting

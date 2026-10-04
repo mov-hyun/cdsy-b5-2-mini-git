@@ -2,6 +2,7 @@
 
 import shlex
 
+from diffing import DiffError, diff_files
 from repository import Commit, MiniGitError, Repository
 
 
@@ -11,6 +12,7 @@ HELP = """Available commands:
   SWITCH <branch_name>
   COMMIT <message>
   MERGE <branch_name>
+  DIFF <file1> <file2>
   LOG
   LOG --sort-by=date|author
   PATH <commit1> <commit2>
@@ -33,10 +35,23 @@ def format_commits(commits: list[Commit]) -> str:
     )
 
 
+def parse_tokens(line: str) -> list[str]:
+    """따옴표 인자를 읽으며 DIFF 경로의 역슬래시는 그대로 유지한다."""
+    lexer = shlex.shlex(line, posix=True)
+    lexer.whitespace_split = True
+    lexer.commenters = ""
+    command = lexer.get_token()
+    if command is None:
+        return []
+    if command.lower() == "diff":
+        lexer.escape = ""
+    return [command, *lexer]
+
+
 def execute(repository: Repository, line: str) -> str | None:
     """한 명령을 실행한다. 문자열은 출력, None은 정상 종료를 의미한다."""
     try:
-        tokens = shlex.split(line)
+        tokens = parse_tokens(line)
     except ValueError as error:
         raise MiniGitError("Invalid args") from error
     if not tokens:
@@ -48,6 +63,11 @@ def execute(repository: Repository, line: str) -> str | None:
         if args:
             raise MiniGitError("Invalid args")
         return HELP if command == "help" else None
+    if command == "diff":
+        if len(args) != 2 or any(not path.strip() for path in args):
+            raise MiniGitError("Invalid args")
+        changes = diff_files(args[0], args[1])
+        return "\n".join(f"{marker} {text}" for marker, text in changes) if changes else "No lines"
     if command == "log":
         if not args:
             return format_commits(repository.log())
@@ -114,7 +134,7 @@ def run() -> None:
             break
         try:
             result = execute(repository, line)
-        except MiniGitError as error:
+        except (MiniGitError, DiffError) as error:
             print(error)
             continue
         if result is None:

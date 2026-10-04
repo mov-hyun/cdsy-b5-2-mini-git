@@ -1,9 +1,26 @@
-"""표준 정렬 API 없이 구현한 안정 병합 정렬."""
+"""표준 정렬 API 없이 구현한 안정 병합 정렬과 삽입 정렬."""
 
 from typing import Any, Callable, TypeVar
 
 
 T = TypeVar("T")
+
+
+def insertion_sort(items: list[T], key: Callable[[T], Any]) -> list[T]:
+    """정렬된 앞부분에 다음 항목을 끼워 넣는 안정 삽입 정렬.
+
+    최선 O(n), 평균/최악 O(n²). 입력 보존과 키 캐시를 위해 O(n) 공간을
+    사용한다. 같은 키는 이동시키지 않아 원래 순서를 유지한다.
+    """
+    result = [(key(item), item) for item in items]
+    for index in range(1, len(result)):
+        current = result[index]
+        previous = index - 1
+        while previous >= 0 and current[0] < result[previous][0]:
+            result[previous + 1] = result[previous]
+            previous -= 1
+        result[previous + 1] = current
+    return [item for _, item in result]
 
 
 def merge_sort(items: list[T], key: Callable[[T], Any]) -> list[T]:

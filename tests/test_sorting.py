@@ -8,10 +8,12 @@ from unittest.mock import patch
 
 from cli import execute
 from repository import MiniGitError, Repository
-from sorting import merge_sort
+from sorting import insertion_sort, merge_sort
 
 
 class MergeSortTests(unittest.TestCase):
+    algorithm = staticmethod(merge_sort)
+
     def test_empty_single_sorted_reverse_and_duplicates(self):
         cases = [([], []), ([7], [7]), ([1, 2, 3], [1, 2, 3]),
                  ([5, 4, 3, 2, 1], [1, 2, 3, 4, 5]),
@@ -19,7 +21,7 @@ class MergeSortTests(unittest.TestCase):
         for original, expected in cases:
             with self.subTest(original=original):
                 before = list(original)
-                result = merge_sort(original, key=lambda value: value)
+                result = self.algorithm(original, key=lambda value: value)
                 self.assertEqual(result, expected)
                 self.assertEqual(original, before)
                 self.assertIsNot(result, original)
@@ -27,7 +29,7 @@ class MergeSortTests(unittest.TestCase):
     def test_equal_keys_preserve_order_across_merge_boundaries(self):
         rows = [{"group": group, "id": index}
                 for index, group in enumerate([2, 1, 2, 1, 1, 2, 1])]
-        result = merge_sort(rows, key=lambda row: row["group"])
+        result = self.algorithm(rows, key=lambda row: row["group"])
         self.assertEqual([row["id"] for row in result], [1, 3, 4, 6, 0, 2, 5])
         self.assertIs(result[0], rows[1])
         self.assertEqual([row["id"] for row in rows], list(range(7)))
@@ -40,9 +42,9 @@ class MergeSortTests(unittest.TestCase):
             calls.append(value)
             return len(value)
 
-        self.assertEqual(merge_sort(values, key=length), ["a", "d", "cc", "bbb"])
+        self.assertEqual(self.algorithm(values, key=length), ["a", "d", "cc", "bbb"])
         self.assertEqual(calls, values)
-        self.assertEqual(merge_sort(values, key=lambda value: value),
+        self.assertEqual(self.algorithm(values, key=lambda value: value),
                          ["a", "bbb", "cc", "d"])
 
     def test_seeded_inputs_preserve_elements_order_and_stability(self):
@@ -50,12 +52,18 @@ class MergeSortTests(unittest.TestCase):
         for size in (0, 1, 2, 3, 7, 16, 31, 100, 257, 2049):
             with self.subTest(size=size):
                 rows = [(rng.randrange(-10, 11), index) for index in range(size)]
-                result = merge_sort(rows, key=lambda row: row[0])
+                result = self.algorithm(rows, key=lambda row: row[0])
                 self.assertEqual(Counter(result), Counter(rows))
                 for previous, current in zip(result, result[1:]):
                     self.assertLessEqual(previous[0], current[0])
                     if previous[0] == current[0]:
                         self.assertLess(previous[1], current[1])
+
+
+class InsertionSortTests(MergeSortTests):
+    """두 알고리즘에 같은 순서·보존·안정성 검증을 적용한다."""
+
+    algorithm = staticmethod(insertion_sort)
 
 
 class SortedLogTests(unittest.TestCase):
