@@ -3,6 +3,10 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+import graph
+from indexing import InvertedIndex
+from sorting import merge_sort
+
 
 class MiniGitError(ValueError):
     """CLI에 그대로 표시할 수 있는 사용자 입력/상태 오류."""
@@ -27,6 +31,7 @@ class Repository:
         self.branches: dict[str, str | None] = {}
         self.current_branch: str | None = None
         self.user_name: str | None = None
+        self.index = InvertedIndex()
         self._next_id = 1
 
     def _require_initialized(self) -> None:
@@ -81,6 +86,53 @@ class Repository:
             parents=() if parent is None else (parent,),
         )
         self.commits[commit_hash] = new_commit
+        self.index.add(new_commit)
         self.branches[self.current_branch] = commit_hash
         self._next_id += 1
         return new_commit
+
+    def get_commit(self, commit_hash: str) -> Commit:
+        """초기화 여부와 hash를 검사하고 커밋을 반환한다."""
+        self._require_initialized()
+        if commit_hash not in self.commits:
+            raise MiniGitError(f"Unknown commit: {commit_hash}")
+        return self.commits[commit_hash]
+
+    def log(self, sort_by: str | None = None) -> list[Commit]:
+        """기본은 부모 우선, 옵션 지정 시 해당 키의 안정 오름차순이다."""
+        self._require_initialized()
+        if sort_by is None:
+            return [self.commits[key] for key in graph.topological_order(self.commits)]
+        if sort_by == "date":
+            key = lambda commit: commit.timestamp
+        elif sort_by == "author":
+            key = lambda commit: commit.author
+        else:
+            raise MiniGitError("Invalid args")
+        # dict의 삽입 순서가 커밋 생성 순서이며, 동률에서는 이 순서를 유지한다.
+        return merge_sort(list(self.commits.values()), key=key)
+
+    def path(self, start: str, end: str) -> list[str]:
+        """존재하는 두 커밋의 무방향 최단 경로를 반환한다."""
+        self.get_commit(start)
+        self.get_commit(end)
+        return graph.shortest_path(self.commits, start, end)
+
+    def ancestors(self, commit_hash: str) -> list[Commit]:
+        """시작 커밋을 제외한 모든 조상을 반환한다."""
+        self.get_commit(commit_hash)
+        return [self.commits[key] for key in graph.ancestors(self.commits, commit_hash)]
+
+    def search_keywords(self, query: str) -> list[Commit]:
+        """메시지 역색인에서 찾은 hash만 저장소에서 조회한다."""
+        self._require_initialized()
+        if not query.strip():
+            raise MiniGitError("Invalid args")
+        return [self.commits[key] for key in self.index.search_keywords(query)]
+
+    def search_author(self, name: str) -> list[Commit]:
+        """작성자 역색인에서 찾은 hash만 저장소에서 조회한다."""
+        self._require_initialized()
+        if not name.strip():
+            raise MiniGitError("Invalid args")
+        return [self.commits[key] for key in self.index.search_author(name)]

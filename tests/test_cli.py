@@ -76,6 +76,23 @@ class CliTests(unittest.TestCase):
                     run()
                 self.assertIn("Goodbye.", output.getvalue())
 
+    def test_entry_point_graph_commands_and_error_recovery(self):
+        result = subprocess.run(
+            [sys.executable, "main.py"],
+            input='init Alice\ncommit root\nbranch feature\nswitch feature\n'
+                  'commit login\nswitch main\ncommit payment\nlog\n'
+                  'path c000002 c000003\nancestors c000003\n'
+                  'path c000001 missing\npath c000001 c000001\nquit\n',
+            text=True, capture_output=True,
+            cwd=Path(__file__).resolve().parents[1], timeout=10,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stderr, "")
+        for expected in ("commit c000001 (Alice,", "commit c000002 (Alice,",
+                         "commit c000003 (Alice,", "Path: c000002->c000001->c000003",
+                         "Unknown commit: missing", "Path: c000001", "Goodbye."):
+            self.assertIn(expected, result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

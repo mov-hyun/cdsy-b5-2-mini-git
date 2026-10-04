@@ -2,17 +2,34 @@
 
 import shlex
 
-from repository import MiniGitError, Repository
+from repository import Commit, MiniGitError, Repository
 
 
-HELP = """Available commands (stage 1):
+HELP = """Available commands:
   INIT <user_name>
   BRANCH <branch_name>
   SWITCH <branch_name>
   COMMIT <message>
+  LOG
+  LOG --sort-by=date|author
+  PATH <commit1> <commit2>
+  ANCESTORS <commit_hash>
+  SEARCH <keyword>
+  SEARCH --author=<name>
   HELP
   EXIT / QUIT
 Use quotes for arguments containing spaces."""
+
+
+def format_commits(commits: list[Commit]) -> str:
+    """필수 필드인 hash, author, timestamp, message를 함께 출력한다."""
+    if not commits:
+        return "No commits"
+    return "\n".join(
+        f"commit {commit.hash} ({commit.author}, {commit.timestamp.isoformat()})\n"
+        f"{commit.message}"
+        for commit in commits
+    )
 
 
 def execute(repository: Repository, line: str) -> str | None:
@@ -30,10 +47,37 @@ def execute(repository: Repository, line: str) -> str | None:
         if args:
             raise MiniGitError("Invalid args")
         return HELP if command == "help" else None
-    if command not in ("init", "branch", "switch", "commit"):
+    if command == "log":
+        if not args:
+            return format_commits(repository.log())
+        if len(args) != 1 or args[0] not in ("--sort-by=date", "--sort-by=author"):
+            raise MiniGitError("Invalid args")
+        return format_commits(repository.log(sort_by=args[0].split("=", 1)[1]))
+    arg_counts = {"init": 1, "branch": 1, "switch": 1, "commit": 1,
+                  "path": 2, "ancestors": 1, "search": 1}
+    if command not in arg_counts:
         raise MiniGitError(f"Unknown command: {tokens[0]}")
-    if len(args) != 1:
+    if len(args) != arg_counts[command]:
         raise MiniGitError("Invalid args")
+
+    if command == "path":
+        path = repository.path(args[0], args[1])
+        return "Path: " + "->".join(path) if path else "No path"
+    if command == "ancestors":
+        commits = repository.ancestors(args[0])
+        return format_commits(commits) if commits else "No ancestors"
+    if command == "search":
+        query = args[0]
+        if query.startswith("--author="):
+            commits = repository.search_author(query.split("=", 1)[1])
+        elif query.startswith("--"):
+            raise MiniGitError("Invalid args")
+        else:
+            commits = repository.search_keywords(query)
+        if not commits:
+            return "No commits"
+        label = "commit" if len(commits) == 1 else "commits"
+        return f"Found {len(commits)} {label}:\n" + format_commits(commits)
 
     value = args[0]
     if command == "init":
