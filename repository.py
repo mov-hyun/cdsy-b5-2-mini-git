@@ -77,13 +77,35 @@ class Repository:
         if not message.strip():
             raise MiniGitError("Invalid args")
         parent = self.head
+        return self._create_commit(message, () if parent is None else (parent,))
+
+    def merge(self, branch_name: str) -> Commit:
+        """현재/대상 브랜치 끝을 부모로 하는 새 커밋을 현재 브랜치에 만든다."""
+        self._require_initialized()
+        if branch_name not in self.branches:
+            raise MiniGitError(f"Unknown branch: {branch_name}")
+        if branch_name == self.current_branch:
+            raise MiniGitError("Cannot merge current branch")
+        current = self.head
+        target = self.branches[branch_name]
+        if current is None:
+            raise MiniGitError(f"Cannot merge empty branch: {self.current_branch}")
+        if target is None:
+            raise MiniGitError(f"Cannot merge empty branch: {branch_name}")
+        if current == target:
+            raise MiniGitError("Branches point to same commit")
+        message = f"Merge branch '{branch_name}' into '{self.current_branch}'"
+        return self._create_commit(message, (current, target))
+
+    def _create_commit(self, message: str, parents: tuple[str, ...]) -> Commit:
+        """검증된 메시지와 기존 부모로 커밋을 기록하고 인덱스·브랜치를 갱신한다."""
         commit_hash = f"c{self._next_id:06d}"
         new_commit = Commit(
             hash=commit_hash,
             message=message,
             author=self.user_name,
             timestamp=datetime.now(timezone.utc),
-            parents=() if parent is None else (parent,),
+            parents=parents,
         )
         self.commits[commit_hash] = new_commit
         self.index.add(new_commit)

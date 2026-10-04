@@ -10,6 +10,7 @@ HELP = """Available commands:
   BRANCH <branch_name>
   SWITCH <branch_name>
   COMMIT <message>
+  MERGE <branch_name>
   LOG
   LOG --sort-by=date|author
   PATH <commit1> <commit2>
@@ -53,7 +54,7 @@ def execute(repository: Repository, line: str) -> str | None:
         if len(args) != 1 or args[0] not in ("--sort-by=date", "--sort-by=author"):
             raise MiniGitError("Invalid args")
         return format_commits(repository.log(sort_by=args[0].split("=", 1)[1]))
-    arg_counts = {"init": 1, "branch": 1, "switch": 1, "commit": 1,
+    arg_counts = {"init": 1, "branch": 1, "switch": 1, "commit": 1, "merge": 1,
                   "path": 2, "ancestors": 1, "search": 1}
     if command not in arg_counts:
         raise MiniGitError(f"Unknown command: {tokens[0]}")
@@ -94,7 +95,10 @@ def execute(repository: Repository, line: str) -> str | None:
         repository.switch(value)
         return f"Switched to branch: {value}"
 
-    new_commit = repository.commit(value)
+    if command == "merge":
+        new_commit = repository.merge(value)
+    else:
+        new_commit = repository.commit(value)
     return f"[{repository.current_branch} {new_commit.hash}] {new_commit.message}"
 
 
